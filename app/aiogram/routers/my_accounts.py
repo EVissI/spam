@@ -1,6 +1,7 @@
 ﻿import json
 import os
-from aiogram import Router, types, F
+from aiogram import Bot, Router, F
+from aiogram.types import Message, CallbackQuery
 from aiogram.filters import StateFilter
 from app.aiogram.kbds.inline.inine_kbd import AccountActionCallback, PresetSelectCallback, account_actions_keyboard, preset_select_keyboard
 from app.aiogram.telethon_logic.utils import join_chats_with_intervals
@@ -38,7 +39,7 @@ async def check_account_liquidity(account) -> bool:
         return False
 
 @my_accounts_router.message(F.text == "Мои аккаунты")
-async def show_my_accounts(message: types.Message):
+async def show_my_accounts(message: Message):
     user_id = message.from_user.id
     async with async_session_maker() as session:
         accounts = await AccountDAO.get_by_user_id(session, user_id)
@@ -59,7 +60,7 @@ async def delayed_disconnect(client, delay: int = 10):
     await client.disconnect()
 
 @my_accounts_router.callback_query(AccountActionCallback.filter(F.action == "delete"))
-async def delete_account_handler(callback: types.CallbackQuery, callback_data: AccountActionCallback):
+async def delete_account_handler(callback: CallbackQuery, callback_data: AccountActionCallback):
     account_id = callback_data.account_id
     async with async_session_maker() as session:
         account = await AccountDAO.find_one_or_none_by_id(data_id=account_id, session=session)
@@ -78,7 +79,7 @@ async def delete_account_handler(callback: types.CallbackQuery, callback_data: A
 
 
 @my_accounts_router.callback_query(AccountActionCallback.filter(F.action == "bind_preset"))
-async def bind_preset_start(callback: types.CallbackQuery, callback_data: AccountActionCallback):
+async def bind_preset_start(callback: CallbackQuery, callback_data: AccountActionCallback):
     account_id = callback_data.account_id
     async with async_session_maker() as session:
         presets = await PresetDAO.get_by_user_id(session, user_id=callback.from_user.id)
@@ -92,7 +93,7 @@ async def bind_preset_start(callback: types.CallbackQuery, callback_data: Accoun
     await callback.answer()
 
 @my_accounts_router.callback_query(PresetSelectCallback.filter())
-async def bind_preset_finish(callback: types.CallbackQuery, callback_data: PresetSelectCallback, bot: types.Bot):
+async def bind_preset_finish(callback: CallbackQuery, callback_data: PresetSelectCallback, bot: Bot):
     account_id = callback_data.account_id
     preset_id = callback_data.preset_id
     async with async_session_maker() as session:
