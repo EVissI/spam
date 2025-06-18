@@ -21,9 +21,11 @@ import os
 
 add_account_router = Router()
 
+
 async def delayed_disconnect(client, delay: int = 10):
     await asyncio.sleep(delay)
     await client.disconnect()
+
 
 class AddAccountState(StatesGroup):
     waiting_for_account_data = State()
@@ -75,8 +77,16 @@ def generate_android_device_params():
     ]
     android_versions = ["Android 14", "Android 13", "Android 12", "Android 11"]
     app_versions = [
-        "11.12.0", "11.11.0", "11.9.1", "11.8.3", "11.8.1",
-        "11.7.4", "11.7.2", "11.6.2", "11.5.5", "11.5.3"
+        "11.12.0",
+        "11.11.0",
+        "11.9.1",
+        "11.8.3",
+        "11.8.1",
+        "11.7.4",
+        "11.7.2",
+        "11.6.2",
+        "11.5.5",
+        "11.5.3",
     ]
     return {
         "device_model": random.choice(device_models),
@@ -141,19 +151,16 @@ async def process_account_with_proxy(message: types.Message, state: FSMContext):
     os.makedirs("sessions", exist_ok=True)
     device_params = generate_android_device_params()
     client_kwargs = dict(
-        session=session_path,
-        api_id=api_id,
-        api_hash=api_hash,
-        **device_params
+        session=session_path, api_id=api_id, api_hash=api_hash, **device_params
     )
     if proxy:
         proxy_tuple = (
-            socks.SOCKS5, 
+            socks.SOCKS5,
             proxy["hostname"],
             proxy["port"],
-            True, 
+            True,
             proxy["username"],
-            proxy["password"]
+            proxy["password"],
         )
         client_kwargs["proxy"] = proxy_tuple
     client = TelegramClient(**client_kwargs)
@@ -162,7 +169,8 @@ async def process_account_with_proxy(message: types.Message, state: FSMContext):
         session_path=session_path, device_params=device_params, proxy=proxy_str
     )
     if not await client.is_user_authorized():
-        await client.send_code_request(phone)
+        result = await client.send_code_request(phone)
+        await state.update_data(phone_code_hash=result.phone_code_hash)
         await message.answer("Введите код, который пришёл в Telegram:")
         await state.set_state(AddAccountState.waiting_for_code)
         return
@@ -182,24 +190,25 @@ async def process_code(message: types.Message, state: FSMContext):
     device_params = data["device_params"]
     proxy_str = data.get("proxy")
     proxy = parse_proxy(proxy_str) if proxy_str else None
+    phone_code_hash = data.get("phone_code_hash")  
     client_kwargs = dict(
         session=session_path, api_id=api_id, api_hash=api_hash, **device_params
     )
     if proxy:
         proxy_tuple = (
-            socks.SOCKS5,  
+            socks.SOCKS5,
             proxy["hostname"],
             proxy["port"],
-            True,  
+            True,
             proxy["username"],
-            proxy["password"]
+            proxy["password"],
         )
         client_kwargs["proxy"] = proxy_tuple
     client = TelegramClient(**client_kwargs)
     await client.connect()
     code = message.text.strip()
     try:
-        await client.sign_in(phone, code)
+        await client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
     except SessionPasswordNeededError:
         await message.answer("Установлен двухфакторный пароль. Введите пароль:")
         await state.set_state(AddAccountState.waiting_for_password)
@@ -220,7 +229,7 @@ async def process_code(message: types.Message, state: FSMContext):
         api_hash=api_hash,
         phone=phone,
         session_path=session_path,
-        proxy=proxy_str if proxy_str != "-" else None
+        proxy=proxy_str if proxy_str != "-" else None,
     )
     await message.answer("Аккаунт успешно добавлен и сохранён!")
     await state.clear()
@@ -241,12 +250,12 @@ async def process_password(message: types.Message, state: FSMContext):
     )
     if proxy:
         proxy_tuple = (
-            socks.SOCKS5, 
+            socks.SOCKS5,
             proxy["hostname"],
             proxy["port"],
-            True,  
+            True,
             proxy["username"],
-            proxy["password"]
+            proxy["password"],
         )
         client_kwargs["proxy"] = proxy_tuple
     client = TelegramClient(**client_kwargs)
@@ -268,7 +277,7 @@ async def process_password(message: types.Message, state: FSMContext):
         api_hash=api_hash,
         phone=phone,
         session_path=session_path,
-        proxy=proxy_str if proxy_str != "-" else None
+        proxy=proxy_str if proxy_str != "-" else None,
     )
     await message.answer("Аккаунт успешно добавлен и сохранён!")
     await state.clear()
@@ -281,7 +290,9 @@ async def save_account_to_db(**kwargs):
     async with async_session_maker() as session:
         user = await UserDAO.get(session, id=kwargs["user_id"])
         if not user:
-            user_model = UserModel(id=kwargs["user_id"], username=kwargs.get("username") or "")
+            user_model = UserModel(
+                id=kwargs["user_id"], username=kwargs.get("username") or ""
+            )
             await UserDAO.add(session, user_model)
         account_model = AccountModel(
             phone=int(kwargs["phone"].replace("+", "")),
@@ -289,6 +300,6 @@ async def save_account_to_db(**kwargs):
             api_hash=kwargs["api_hash"],
             user_id=kwargs["user_id"],
             session_path=kwargs["session_path"],
-            proxy=json.dumps(kwargs.get("proxy")) if kwargs.get("proxy") else None
+            proxy=json.dumps(kwargs.get("proxy")) if kwargs.get("proxy") else None,
         )
         await AccountDAO.add(session, account_model)
