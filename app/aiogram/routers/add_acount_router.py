@@ -1,7 +1,7 @@
 ﻿import asyncio
 import json
 import random
-import uuid
+import socks
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -148,9 +148,10 @@ async def process_account_with_proxy(message: types.Message, state: FSMContext):
     )
     if proxy:
         proxy_tuple = (
-            proxy["scheme"],
+            socks.SOCKS5, 
             proxy["hostname"],
             proxy["port"],
+            True, 
             proxy["username"],
             proxy["password"]
         )
@@ -186,11 +187,12 @@ async def process_code(message: types.Message, state: FSMContext):
     )
     if proxy:
         proxy_tuple = (
-            proxy["scheme"],
+            socks.SOCKS5,  
             proxy["hostname"],
             proxy["port"],
+            True,  
             proxy["username"],
-            proxy["password"],
+            proxy["password"]
         )
         client_kwargs["proxy"] = proxy_tuple
     client = TelegramClient(**client_kwargs)
@@ -239,11 +241,12 @@ async def process_password(message: types.Message, state: FSMContext):
     )
     if proxy:
         proxy_tuple = (
-            proxy["scheme"],
+            socks.SOCKS5, 
             proxy["hostname"],
             proxy["port"],
+            True,  
             proxy["username"],
-            proxy["password"],
+            proxy["password"]
         )
         client_kwargs["proxy"] = proxy_tuple
     client = TelegramClient(**client_kwargs)
