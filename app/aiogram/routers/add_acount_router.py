@@ -7,6 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.filters import StateFilter
 from app.aiogram.kbds.reply.main_kbd import MainKeyboard
+from app.aiogram.utils import delayed_disconnect, parse_proxy, save_account_to_db
 from app.db.dao import UserDAO
 from app.db.models import Accounts
 from app.db.shemas import UserModel
@@ -21,49 +22,11 @@ import os
 
 add_account_router = Router()
 
-
-async def delayed_disconnect(client, delay: int = 10):
-    await asyncio.sleep(delay)
-    await client.disconnect()
-
-
 class AddAccountState(StatesGroup):
     waiting_for_account_data = State()
     waiting_for_proxy = State()
     waiting_for_code = State()
     waiting_for_password = State()
-
-
-def parse_proxy(text: str):
-    if text.strip() == "-":
-        return None
-    try:
-        if "://" in text:
-            scheme, rest = text.split("://", 1)
-        else:
-            scheme, rest = "socks5", text
-        if "@" in rest:
-            creds, host_port = rest.split("@", 1)
-            if ":" in creds:
-                username, password = creds.split(":", 1)
-            else:
-                username, password = creds, ""
-        else:
-            host_port = rest
-            username = password = None
-        if ":" in host_port:
-            host, port = host_port.split(":")
-        else:
-            host, port = host_port, 1080
-        return {
-            "scheme": scheme,
-            "hostname": host,
-            "port": int(port),
-            "username": username,
-            "password": password,
-        }
-    except Exception:
-        return None
 
 
 def generate_android_device_params():
@@ -109,7 +72,7 @@ def parse_account_data(text: str):
     return int(api_id), api_hash, phone
 
 
-@add_account_router.message(F.text == MainKeyboard.get_user_kb_texts()["add_account"])
+@add_account_router.message(F.text == MainKeyboard.get_user_kb_texts()["add_account_api"])
 async def ask_account_data(message: types.Message, state: FSMContext):
     await message.answer(
         "Отправьте данные аккаунта в формате:\n<code>api_id:api_hash:номер_телефона</code>\n"
@@ -174,7 +137,6 @@ async def process_account_with_proxy(message: types.Message, state: FSMContext):
         await message.answer("Введите код, который пришёл в Telegram:")
         await state.set_state(AddAccountState.waiting_for_code)
         return
-    await client.send_message("me", "✅ Аккаунт уже был добавлен ранее!")
     asyncio.create_task(delayed_disconnect(client, delay=10))
     await message.answer("Аккаунт уже был добавлен ранее!")
     await state.clear()
@@ -224,7 +186,6 @@ async def process_code(message: types.Message, state: FSMContext):
     asyncio.create_task(delayed_disconnect(client, delay=10))
     await save_account_to_db(
         user_id=message.from_user.id,
-        username=message.from_user.username,
         api_id=api_id,
         api_hash=api_hash,
         phone=phone,
@@ -272,7 +233,6 @@ async def process_password(message: types.Message, state: FSMContext):
     asyncio.create_task(delayed_disconnect(client, delay=10))
     await save_account_to_db(
         user_id=message.from_user.id,
-        username=message.from_user.username,
         api_id=api_id,
         api_hash=api_hash,
         phone=phone,
@@ -283,23 +243,3 @@ async def process_password(message: types.Message, state: FSMContext):
     await state.clear()
 
 
-async def save_account_to_db(**kwargs):
-    from app.db.dao import UserDAO, AccountDAO
-    from app.db.shemas import AccountModel, UserModel
-
-    async with async_session_maker() as session:
-        user = await UserDAO.get(session, id=kwargs["user_id"])
-        if not user:
-            user_model = UserModel(
-                id=kwargs["user_id"], username=kwargs.get("username") or ""
-            )
-            await UserDAO.add(session, user_model)
-        account_model = AccountModel(
-            phone=int(kwargs["phone"].replace("+", "")),
-            api_id=kwargs["api_id"],
-            api_hash=kwargs["api_hash"],
-            user_id=kwargs["user_id"],
-            session_path=kwargs["session_path"],
-            proxy=json.dumps(kwargs.get("proxy")) if kwargs.get("proxy") else None,
-        )
-        await AccountDAO.add(session, account_model)

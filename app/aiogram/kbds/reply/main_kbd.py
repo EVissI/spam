@@ -8,7 +8,8 @@ from app.db.models import User
 
 class MainKeyboard:
     __user_kb_texts_dict = {
-        "add_account": "Добавить аккаунт",
+        "add_account_tdata": "Добавить аккаунт по tdata",
+        "add_account_api": "Добавить аккаунт по api",
         "create_preset": "Добавить пресет",
         "my_accounts": "Мои аккаунты",
     }
