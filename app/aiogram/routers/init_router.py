@@ -9,4 +9,4 @@ from app.aiogram.routers.add_account_tdata import add_tdata_router
 
 init_router = Router()
 init_router.include_routers(start_router,my_accounts_router, 
-                            add_account_router, add_preset_router,add_tdata_router)
+                            add_account_router, add_preset_router, add_tdata_router)

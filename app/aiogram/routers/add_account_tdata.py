@@ -44,7 +44,7 @@ async def process_tdata_file(message: types.Message, state: FSMContext):
     uploads_dir = "uploads"
     os.makedirs(uploads_dir, exist_ok=True)
     archive_path = os.path.join(uploads_dir, file.file_name)
-    await file.download(destination=archive_path)
+    await message.bot.download(file, destination=archive_path)
 
     extract_dir = os.path.join(uploads_dir, file.file_name + "_extracted")
     os.makedirs(extract_dir, exist_ok=True)
